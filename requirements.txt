@@ -1,0 +1,4 @@
+telethon>=1.16.4
+python-resize-image==1.1.19
+imagehash>=4.1.0
+python-dateutil>=2.6.0
