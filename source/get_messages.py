@@ -1,4 +1,4 @@
-from telethon import TelegramClient
+from telethon import TelegramClient, events
 from PIL import Image
 
 import asyncio
@@ -149,7 +149,19 @@ class TelegramCollector():
             os.remove(path)
         os.rename(path + ".temp", path)
 
-    async def _save_message(self, message, dialog, day_path = "./data/mensagens/", group_path="./data/mensagens_grupo/"):
+    def _append_processed_id(self, id, path='./data/mid_file.txt'):
+        """
+        Salva um novo id de uma mensagem coletada.
+
+        Parâmetros
+        ------------
+            path : str
+                Caminho para o arquivo contendo os ids das mensagens.
+        """
+        with open(path, 'a') as fmid:
+            print(str(id), file=fmid)
+
+    async def _save_message(self, message, dialog_name, day_path = "./data/mensagens/", group_path="./data/mensagens_grupo/"):
         """
         Escreve em formato json a mensagem coletada no arquivo
         referente ao grupo em que ela foi enviada. Caso o arquivo do grupo
@@ -169,7 +181,7 @@ class TelegramCollector():
 
         item["message_id"] = message.id
         item["group_id"] = message.to_id.chat_id
-        item["group_name"] = dialog.entity.title
+        item["group_name"] = dialog_name
         item["country"] = None
         item["sender"] = message.from_id
         item["data"] = message.date.strftime("%Y-%m-%d %H:%M:%S")
@@ -237,8 +249,9 @@ class TelegramCollector():
 
         notification["message_id"] = message.id
         notification["group_id"] = message.to_id.chat_id
-        notification["date"] = message.date.strftime("%Y-%m-%d %H:%M:%S")
-        #notification["action"] = message.action.
+        notification["date"] = message.date.strftime("%Y-%m-%d %H:%M:%S")       
+        notification["action"] = {"action_class" : type(message.action).__name__ , 
+                                  "fields" : message.action.__dict__}
         notification["sender"] = message.from_id
 
         notification_group_filename = os.path.join(
@@ -248,6 +261,39 @@ class TelegramCollector():
         with open(notification_group_filename, "a") as json_file:
             json.dump(notification, json_file)
             print("", file=json_file)
+
+    async def _run_unread_collector(self):
+        async_client = TelegramClient('collector_unread', self.api_id, self.api_hash)
+        group_names = {}
+
+        @async_client.on(events.NewMessage)
+        async def event_handler(event):
+            message = event.message
+            if (message.to_id.chat_id and group_names[str(message.to_id.chat_id)] and 
+                    str(message.from_id) not in self.user_blacklist):
+                await self._save_message(message, group_names[str(message.to_id.chat_id)])
+                self._append_processed_id(message.id)
+
+        @async_client.on(events.ChatAction)
+        async def event_handler(event):
+            message = event.action_message
+            if (message.to_id.chat_id and group_names[str(message.to_id.chat_id)] and 
+                    str(message.from_id) not in self.user_blacklist):
+                self._save_notification(message)
+                self._append_processed_id(message.id)
+                if (type(message.action).__name__ == "MessageActionChatEditTitle") :
+                    #in case the title changes
+                    group_names[str(message.to_id.chat_id)] = message.action.title
+
+        await async_client.start()
+
+        async for dialog in async_client.iter_dialogs():
+            if (dialog.is_group and dialog.title not in self.group_blacklist and
+                    str(abs(dialog.id)) not in self.group_blacklist):
+                #TODO: Check why dialog.id is a negative number
+                group_names[str(abs(dialog.id))] = dialog.title
+
+        await async_client.run_until_disconnected()
 
     async def run(self):
         """
@@ -271,29 +317,41 @@ class TelegramCollector():
 
         # Load previous saved messages
         previous_ids = self._get_load_messages()
+        print("Starting " + self.collection_mode + " collection.")
+        try:
+            if (self.collection_mode != 'unread'):
+                async with TelegramClient('collector_local', self.api_id, self.api_hash) as client:
+                    async for dialog in client.iter_dialogs():
+                        #TODO: Check why dialog.id is a negative number
+                        if (dialog.is_group and dialog.title not in self.group_blacklist and
+                            str(abs(dialog.id)) not in self.group_blacklist):
+                            async for message in client.iter_messages(dialog):
+                                if (message.date < start_date):
+                                    break
+                                if (message.date > end_date and self.collection_mode == 'period'):
+                                    continue
+                                
+                                if (message.id in previous_ids or str(message.from_id) in self.user_blacklist):
+                                    continue
 
-        async with TelegramClient('collector_local', self.api_id, self.api_hash) as client:
-            async for dialog in client.iter_dialogs():
+                                if (not message.action):
+                                    await self._save_message(message, dialog.entity.title)
+                                else:
+                                    self._save_notification(message)
 
-                if (dialog.is_group and (dialog.title not in self.group_blacklist or 
-                    dialog.id not in self.group_blacklist)):
-                    async for message in client.iter_messages(dialog):
-                        if (message.date < start_date):
-                            break
-                        if (message.date > end_date and self.collection_mode == 'period'):
-                            continue
-                        
-                        if (message.id in previous_ids or message.from_id in self.user_blacklist):
-                            continue
+                                previous_ids.add(message.id)   
 
-                        if (not message.action):
-                            await self._save_message(message, dialog)
-                        else:
-                            self._save_notification(message)
+            self._save_processed_ids(previous_ids)
 
-                        previous_ids.add(message.id)
+            print("Finished collection.")
+        except Exception as e:
+            self._save_processed_ids(previous_ids)
+        
+        print("Starting unread message collection.")
+        if (self.collection_mode == 'unread' or 
+                self.collection_mode == 'continuous'):
+            await self._run_unread_collector()
 
-        self._save_processed_ids(previous_ids)
 
 
 async def main():
