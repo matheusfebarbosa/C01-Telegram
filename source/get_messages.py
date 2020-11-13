@@ -100,7 +100,7 @@ class TelegramCollector():
         self.collection_mode       = args_dict["collection_mode"]
         self.start_date            = args_dict["start_date"]
         self.end_date              = args_dict["end_date"]
-        self.write_mode              = args_dict["write_mode"]
+        self.write_mode            = args_dict["write_mode"]
         self.group_blacklist       = args_dict["group_blacklist"]
         self.user_blacklist        = args_dict["user_blacklist"]
         self.collect_messages      = args_dict["collect_messages"]
@@ -114,7 +114,7 @@ class TelegramCollector():
         self.api_id                = args_dict["api_id"]
         self.api_hash              = args_dict["api_hash"]
 
-    def _get_load_messages(self, path='./data/mid_file.txt'):
+    def _get_load_messages(self, path='/data/mid_file.txt'):
         """
         Carrega e retorna um conjunto de ids das mensagens já coletadas.
 
@@ -132,7 +132,7 @@ class TelegramCollector():
 
         return messagesIDs
 
-    def _save_processed_ids(self, id_set, path='./data/mid_file.txt'):
+    def _save_processed_ids(self, id_set, path='/data/mid_file.txt'):
         """
         Salva o conjunto de ids das mensagens já coletadas.
 
@@ -149,7 +149,7 @@ class TelegramCollector():
             os.remove(path)
         os.rename(path + ".temp", path)
 
-    def _append_processed_id(self, id, path='./data/mid_file.txt'):
+    def _append_processed_id(self, id, path='/data/mid_file.txt'):
         """
         Salva um novo id de uma mensagem coletada.
 
@@ -161,7 +161,7 @@ class TelegramCollector():
         with open(path, 'a') as fmid:
             print(str(id), file=fmid)
 
-    async def _save_message(self, message, dialog_name, day_path = "./data/mensagens/", group_path="./data/mensagens_grupo/"):
+    async def _save_message(self, message, dialog_name, day_path = "/data/mensagens/", group_path="/data/mensagens_grupo/"):
         """
         Escreve em formato json a mensagem coletada no arquivo
         referente ao grupo em que ela foi enviada. Caso o arquivo do grupo
@@ -176,14 +176,11 @@ class TelegramCollector():
         """
         item = dict()
 
-        #TODO: get phone number
-
-
         item["message_id"] = message.id
         item["group_id"] = message.to_id.chat_id
         item["group_name"] = dialog_name
         item["country"] = None
-        item["sender"] = message.from_id
+        item["sender"] = message.from_id.user_id
         item["data"] = message.date.strftime("%Y-%m-%d %H:%M:%S")
         item["mediatype"] = None
         item["file"] = None
@@ -192,16 +189,16 @@ class TelegramCollector():
         item["checksum"] = None
 
         if message.media:
-            base_path = "./data/others/"
+            base_path = "/data/others/"
             item["mediatype"] = "other"
             if message.photo:
-                base_path = "./data/image/"
+                base_path = "/data/image/"
                 item["mediatype"] = "image"
             elif message.audio or message.voice:
-                base_path = "./data/audio/"
+                base_path = "/data/audio/"
                 item["mediatype"] = "audio"
             elif message.video or message.video_note:
-                base_path = "./data/video/"
+                base_path = "/data/video/"
                 item["mediatype"] = "video"
             
 
@@ -232,7 +229,7 @@ class TelegramCollector():
                 json.dump(item, json_file)
                 print("", file=json_file)
     
-    def _save_notification(self, message, path='./data/notificacoes/'):
+    def _save_notification(self, message, path='/data/notificacoes/'):
         """
         Escreve em formato json a notificação contida na mensagem no arquivo
         referente ao grupo em que ela foi enviada. Caso o arquivo do grupo
@@ -252,7 +249,7 @@ class TelegramCollector():
         notification["date"] = message.date.strftime("%Y-%m-%d %H:%M:%S")       
         notification["action"] = {"action_class" : type(message.action).__name__ , 
                                   "fields" : message.action.__dict__}
-        notification["sender"] = message.from_id
+        notification["sender"] = message.from_id.user_id
 
         notification_group_filename = os.path.join(
             path, "notificacoes_grupo_" + str(notification["group_id"]) + ".json" )
@@ -263,7 +260,7 @@ class TelegramCollector():
             print("", file=json_file)
 
     async def _run_unread_collector(self):
-        async_client = TelegramClient('collector_unread', self.api_id, self.api_hash)
+        async_client = TelegramClient('/data/collector_local', self.api_id, self.api_hash)
         group_names = {}
 
         @async_client.on(events.NewMessage)
@@ -302,13 +299,13 @@ class TelegramCollector():
         """
 
         # Create data directories
-        pathlib.Path("./data/mensagens").mkdir(parents=True, exist_ok=True)
-        pathlib.Path("./data/image").mkdir(parents=True, exist_ok=True)
-        pathlib.Path("./data/others").mkdir(parents=True, exist_ok=True)
-        pathlib.Path("./data/audio").mkdir(parents=True, exist_ok=True)
-        pathlib.Path("./data/video").mkdir(parents=True, exist_ok=True)
-        pathlib.Path("./data/mensagens_grupo").mkdir(parents=True, exist_ok=True)
-        pathlib.Path("./data/notificacoes").mkdir(parents=True, exist_ok=True)
+        pathlib.Path("/data/mensagens").mkdir(parents=True, exist_ok=True)
+        pathlib.Path("/data/image").mkdir(parents=True, exist_ok=True)
+        pathlib.Path("/data/others").mkdir(parents=True, exist_ok=True)
+        pathlib.Path("/data/audio").mkdir(parents=True, exist_ok=True)
+        pathlib.Path("/data/video").mkdir(parents=True, exist_ok=True)
+        pathlib.Path("/data/mensagens_grupo").mkdir(parents=True, exist_ok=True)
+        pathlib.Path("/data/notificacoes").mkdir(parents=True, exist_ok=True)
 
         # Get start and end dates
         utc = pytz.UTC
@@ -320,7 +317,7 @@ class TelegramCollector():
         print("Starting " + self.collection_mode + " collection.")
         try:
             if (self.collection_mode != 'unread'):
-                async with TelegramClient('collector_local', self.api_id, self.api_hash) as client:
+                async with TelegramClient('/data/collector_local', self.api_id, self.api_hash) as client:
                     async for dialog in client.iter_dialogs():
                         #TODO: Check why dialog.id is a negative number
                         if (dialog.is_group and dialog.title not in self.group_blacklist and
@@ -345,6 +342,7 @@ class TelegramCollector():
 
             print("Finished collection.")
         except Exception as e:
+            traceback.print_exc()
             self._save_processed_ids(previous_ids)
         
         print("Starting unread message collection.")

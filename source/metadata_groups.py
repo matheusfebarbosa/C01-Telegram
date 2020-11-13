@@ -64,11 +64,11 @@ class GroupMetadataCollector():
                 utilizado na coleta.
         """
         now = datetime.datetime.now()
-        new_folder = './data/metadata_grupos_%s/' % (now.strftime('%Y-%m-%d_%H-%M-%S'))
+        new_folder = '/data/metadata_grupos_%s/' % (now.strftime('%Y-%m-%d_%H-%M-%S'))
         pathlib.Path(new_folder).mkdir(parents=True, exist_ok=True)
         pathlib.Path(os.path.join(new_folder, "profile_pics")).mkdir(parents=True, exist_ok=True)
 
-        async with TelegramClient('collector_local', self.api_id, self.api_hash) as client:
+        async with TelegramClient('/data/collector_local', self.api_id, self.api_hash) as client:
             async for dialog in client.iter_dialogs():
                 if ((not dialog.is_group) or dialog.title in self.group_blacklist or
                         str(abs(dialog.id)) in self.group_blacklist):

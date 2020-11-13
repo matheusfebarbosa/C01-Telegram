@@ -1,0 +1,11 @@
+{
+  "collection_mode": "period",
+  "group_blacklist": ["553192756920-1454721535", "553185724030-1460427219"],
+  "collect_messages": true,
+  "collect_audios": true,
+  "collect_videos": true,
+  "collect_images": true,
+  "process_audio_hashes": true,
+  "process_video_hashes": true,
+  "process_image_hashes": true
+}

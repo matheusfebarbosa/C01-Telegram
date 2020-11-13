@@ -1,0 +1,13 @@
+version: "3"
+
+services:
+  collector:
+     build: .
+     volumes: 
+       - "./data:/data"
+       - "./config:/config"
+     working_dir: /app
+
+volumes:
+  data:
+  config:
