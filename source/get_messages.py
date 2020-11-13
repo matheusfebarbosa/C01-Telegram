@@ -58,19 +58,23 @@ class TelegramCollector():
             ID da API de Coleta gerado em my.telegram.org (Dado sensível).
     api_hash : str
             Hash da API de Coleta gerado em my.telegram.org (Dado sensível).
+    
     Métodos
     -----------
-    Faz a coleta das mensagens de grupos de Whatsapp de acordo
+    Faz a coleta das mensagens de grupos de Telegram de acordo
     com os parâmetros fornecidos na criação do objeto de coleta.
+
         Parâmetros
         ------------
             profile_path : str
                 Caminho para um profile alternativo do navegador
                 utilizado na coleta.
     """
+
     def __init__(self, args):
         """
         Inicializa o objeto
+
         Parâmetros
         ------------
             args : argparse.Namespace()
@@ -161,7 +165,7 @@ class TelegramCollector():
         with open(path, 'a') as fmid:
             print(str(id), file=fmid)
 
-    async def _save_message(self, message, dialog_name, day_path = "/data/mensagens/", group_path="/data/mensagens_grupo/"):
+    async def _save_message(self, message, dialog_name, daily_path = "/data/mensagens/", group_path="/data/mensagens_grupo/"):
         """
         Escreve em formato json a mensagem coletada no arquivo
         referente ao grupo em que ela foi enviada. Caso o arquivo do grupo
@@ -179,12 +183,11 @@ class TelegramCollector():
         item["message_id"] = message.id
         item["group_id"] = message.to_id.chat_id
         item["group_name"] = dialog_name
-        item["country"] = None
         item["sender"] = message.from_id.user_id
         item["data"] = message.date.strftime("%Y-%m-%d %H:%M:%S")
-        item["mediatype"] = None
-        item["file"] = None
         item["content"] = message.message 
+        item["file"] = None
+        item["mediatype"] = None
         item["phash"] = None
         item["checksum"] = None
 
@@ -200,7 +203,6 @@ class TelegramCollector():
             elif message.video or message.video_note:
                 base_path = "/data/video/"
                 item["mediatype"] = "video"
-            
 
             path = os.path.join(base_path, message.date.strftime("%Y-%m-%d"), str(item["message_id"]))
             file_path = await message.download_media(path)
@@ -222,7 +224,7 @@ class TelegramCollector():
                 print("", file=json_file)
 
         if self.write_mode == "day" or self.write_mode == "both":
-            message_day_filename = os.path.join(day_path, "mensagens_" + message.date.strftime("%Y-%m-%d") + ".json")
+            message_day_filename = os.path.join(daily_path, "mensagens_" + message.date.strftime("%Y-%m-%d") + ".json")
 
             # Save message on file for all messages of the day
             with open(message_day_filename, "a") as json_file:
