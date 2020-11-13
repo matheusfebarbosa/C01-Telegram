@@ -5,7 +5,7 @@ from os.path import isfile, join
 import json
 import argparse
 
-# Example: python summarization_util.py -t images -m checksum -s 2020-06-10 -e 2020-06-11 
+# Example: python summarization_util.py -t images -m checksum -s 2020-09-18 -e 2020-11-11 
 
 
 def jaccard_similarity(x, y):
@@ -100,6 +100,9 @@ class SummarizationUtil:
         elif self.media_type == 'audios':
             media = 'audio'
             hash_methods = ['checksum']
+        elif self.media_type == 'others':
+            media = 'other'
+            hash_methods = ['checksum']
         else:
             print("Type of media not supported.")
             return
@@ -125,7 +128,7 @@ class SummarizationUtil:
 
                     if media == kind:
                         if (media == 'image' or media == 'video' or
-                                media == 'audio'):
+                                media == 'audio' or media == 'other'):
                             hash = message[self.comparison_method]
 
                         if hash == "":
@@ -274,7 +277,7 @@ def main():
 
     parser.add_argument("-t", "--media_type", type=str,
                         help="Tipo de mídia para gerar a sumarização (images,"
-                        " audios, videos, 'texts').", required=True)
+                        " audios, videos, 'texts', others).", required=True)
 
     parser.add_argument("-m", "--comparison_method", type=str,
                         help="Metódo para calcular a similaridade/igualdade"
@@ -300,7 +303,7 @@ def main():
     try:
         util = SummarizationUtil(args.media_type, args.comparison_method,
                                  args.start_date, args.end_date)
-        if args.media_type in ['audios', 'images', 'videos']:
+        if args.media_type in ['audios', 'images', 'videos', 'others']:
             util.generate_media_summarization(args.output)
         elif args.media_type in ['texts']:
             util.generate_text_summarization(args.output)
