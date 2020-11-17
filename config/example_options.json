@@ -5,7 +5,9 @@
   "collect_audios": true,
   "collect_videos": true,
   "collect_images": true,
+  "collect_others": false,
   "process_audio_hashes": true,
   "process_video_hashes": true,
-  "process_image_hashes": true
+  "process_image_hashes": true,
+  "process_other_hashes": false
 }

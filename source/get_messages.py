@@ -111,10 +111,12 @@ class TelegramCollector():
         self.collect_audios        = args_dict["collect_audios"]
         self.collect_videos        = args_dict["collect_videos"]
         self.collect_images        = args_dict["collect_images"]
+        self.collect_others        = args_dict["collect_others"]
         self.collect_notifications = args_dict["collect_notifications"]
         self.process_audio_hashes  = args_dict["process_audio_hashes"]
         self.process_image_hashes  = args_dict["process_image_hashes"]
         self.process_video_hashes  = args_dict["process_video_hashes"]
+        self.process_other_hashes  = args_dict["process_other_hashes"]
         self.api_id                = args_dict["api_id"]
         self.api_hash              = args_dict["api_hash"]
 
@@ -192,8 +194,6 @@ class TelegramCollector():
         item["checksum"] = None
 
         if message.media:
-            base_path = "/data/others/"
-            item["mediatype"] = "other"
             if message.photo:
                 base_path = "/data/image/"
                 item["mediatype"] = "image"
@@ -203,16 +203,27 @@ class TelegramCollector():
             elif message.video or message.video_note:
                 base_path = "/data/video/"
                 item["mediatype"] = "video"
+            else:
+                base_path = "/data/others/"
+                item["mediatype"] = "other"
 
-            path = os.path.join(base_path, message.date.strftime("%Y-%m-%d"), str(item["message_id"]))
-            file_path = await message.download_media(path)
+            if (item["mediatype"] == "image" and self.collect_images) or \
+                    (item["mediatype"] == "audio" and self.collect_audios) or \
+                    (item["mediatype"] == "video" and self.collect_videos) or \
+                    (item["mediatype"] == "other" and self.collect_others):
+                path = os.path.join(base_path, message.date.strftime("%Y-%m-%d"), str(item["message_id"]))
+                file_path = await message.download_media(path)
 
-            item["file"] = file_path.split("/")[-1]
+                item["file"] = file_path.split("/")[-1]
 
-            if file_path != None:
-                item["checksum"] = md5(file_path)
-                if item["mediatype"] == "image":
-                    item["phash"] = str(imagehash.phash(Image.open(file_path)))
+                if file_path != None and (
+                        (item["mediatype"] == "image" and self.process_image_hashes) or 
+                        (item["mediatype"] == "audio" and self.process_audio_hashes) or 
+                        (item["mediatype"] == "video" and self.process_video_hashes) or 
+                        (item["mediatype"] == "other" and self.process_other_hashes)):
+                    item["checksum"] = md5(file_path)
+                    if item["mediatype"] == "image":
+                        item["phash"] = str(imagehash.phash(Image.open(file_path)))
 
         # Save message on group ID file
         if self.write_mode == "group" or self.write_mode == "both":
@@ -268,7 +279,8 @@ class TelegramCollector():
         @async_client.on(events.NewMessage)
         async def event_handler(event):
             message = event.message
-            if (message.to_id.chat_id and group_names[str(message.to_id.chat_id)] and 
+            if (self.collect_messages and message.to_id.chat_id and 
+                    group_names[str(message.to_id.chat_id)] and 
                     str(message.from_id) not in self.user_blacklist):
                 await self._save_message(message, group_names[str(message.to_id.chat_id)])
                 self._append_processed_id(message.id)
@@ -276,7 +288,8 @@ class TelegramCollector():
         @async_client.on(events.ChatAction)
         async def event_handler(event):
             message = event.action_message
-            if (message.to_id.chat_id and group_names[str(message.to_id.chat_id)] and 
+            if (self.collect_notifications and message.to_id.chat_id and 
+                    group_names[str(message.to_id.chat_id)] and 
                     str(message.from_id) not in self.user_blacklist):
                 self._save_notification(message)
                 self._append_processed_id(message.id)
@@ -333,12 +346,12 @@ class TelegramCollector():
                                 if (message.id in previous_ids or str(message.from_id) in self.user_blacklist):
                                     continue
 
-                                if (not message.action):
+                                if (not message.action) and self.collect_messages:
                                     await self._save_message(message, dialog.entity.title)
-                                else:
+                                    previous_ids.add(message.id)   
+                                elif message.action and self.collect_notifications:
                                     self._save_notification(message)
-
-                                previous_ids.add(message.id)   
+                                    previous_ids.add(message.id)   
 
             self._save_processed_ids(previous_ids)
 
@@ -346,10 +359,10 @@ class TelegramCollector():
         except Exception as e:
             traceback.print_exc()
             self._save_processed_ids(previous_ids)
-        
-        print("Starting unread message collection.")
+
         if (self.collection_mode == 'unread' or 
-                self.collection_mode == 'continuous'):
+                self.collection_mode == 'continuous'): 
+            print("Starting unread message collection.")
             await self._run_unread_collector()
 
 
@@ -389,6 +402,10 @@ async def main():
                         help="Se imagens devem ser coletadas durante a"
                         " execução.", default=True)
 
+    parser.add_argument("--collect_others", type=bool,
+                        help="Se outros tipos de mídia (e.g. documentos, stickers) devem "
+                        "ser coletadas durante a execução.", default=True)
+
     parser.add_argument("--collect_notifications", type=bool,
                         help="Se as notificações devem ser coletadas durante a"
                         " execução.", default=True)
@@ -403,6 +420,10 @@ async def main():
 
     parser.add_argument("--process_video_hashes", type=bool,
                         help="Se hashes de videos devem ser calculados durante"
+                        " a execução.", default=False)
+
+    parser.add_argument("--process_other_hashes", type=bool,
+                        help="Se hashes de outros tipos de mídiaa devem ser calculados durante"
                         " a execução.", default=False)
 
     parser.add_argument("--group_blacklist", nargs="+",
