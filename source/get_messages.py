@@ -180,19 +180,32 @@ class TelegramCollector():
                 Caminho da pasta em que os arquivos de mensagens por grupo
                 serão escritos.
         """
+        #print(message) #log message
+        
         item = dict()
-
+        try: 
+            item["group_id"] = message.to_id.chat_id
+        except:
+            item["group_id"] = message.to_id.channel_id
+                
         item["message_id"] = message.id
-        item["group_id"] = message.to_id.chat_id
         item["group_name"] = dialog_name
-        item["sender"] = message.from_id.user_id
-        item["data"] = message.date.strftime("%Y-%m-%d %H:%M:%S")
-        item["content"] = message.message 
+        
+        #print(message)
+        #print(message.from_id)
+        try:
+            item["sender"]     = message.from_id.user_id
+        except:
+            item["sender"]     = str(message.to_id.channel_id)
+
+        
+        item["data"]       = message.date.strftime("%Y-%m-%d %H:%M:%S")
+        item["content"]    = message.message 
         item["file"] = None
         item["mediatype"] = None
         item["phash"] = None
         item["checksum"] = None
-
+        
         if message.media:
             if message.photo:
                 base_path = "/data/image/"
@@ -212,19 +225,31 @@ class TelegramCollector():
                     (item["mediatype"] == "video" and self.collect_videos) or \
                     (item["mediatype"] == "other" and self.collect_others):
                 path = os.path.join(base_path, message.date.strftime("%Y-%m-%d"), str(item["message_id"]))
-                file_path = await message.download_media(path)
+                try:
+                    file_path = await message.download_media(path)
+                    
+                    if file_path:
+                        if os.path.isfile(file_path): 
+                            
+                            item["file"] = file_path.split("/")[-1]
 
-                item["file"] = file_path.split("/")[-1]
-
-                if file_path != None and (
-                        (item["mediatype"] == "image" and self.process_image_hashes) or 
-                        (item["mediatype"] == "audio" and self.process_audio_hashes) or 
-                        (item["mediatype"] == "video" and self.process_video_hashes) or 
-                        (item["mediatype"] == "other" and self.process_other_hashes)):
-                    item["checksum"] = md5(file_path)
-                    if item["mediatype"] == "image":
-                        item["phash"] = str(imagehash.phash(Image.open(file_path)))
-
+                            if file_path != None and (
+                                    (item["mediatype"] == "image" and self.process_image_hashes) or 
+                                    (item["mediatype"] == "audio" and self.process_audio_hashes) or 
+                                    (item["mediatype"] == "video" and self.process_video_hashes) or 
+                                    (item["mediatype"] == "other" and self.process_other_hashes)):
+                                item["checksum"] = md5(file_path)
+                                if item["mediatype"] == "image":
+                                    try: 
+                                        item["phash"] = str(imagehash.phash(Image.open(file_path)))
+                                    except:
+                                        item["phash"] = str(imagehash.phash(Image.open(file_path)))
+                except:
+                    print ("Error getting the file")
+                    item["phash"] = None
+                    item["checksum"] = None
+                
+            print(item)
         # Save message on group ID file
         if self.write_mode == "group" or self.write_mode == "both":
             message_group_filename = os.path.join(group_path, "mensagens_grupo_" + str(item["group_id"]) + ".json" )
@@ -258,11 +283,22 @@ class TelegramCollector():
         notification = dict()
 
         notification["message_id"] = message.id
-        notification["group_id"] = message.to_id.chat_id
+        
+        try: 
+            notification["group_id"] = message.to_id.chat_id
+        except:
+            notification["group_id"] = message.to_id.channel_id
         notification["date"] = message.date.strftime("%Y-%m-%d %H:%M:%S")       
         notification["action"] = {"action_class" : type(message.action).__name__ , 
                                   "fields" : message.action.__dict__}
-        notification["sender"] = message.from_id.user_id
+                                  
+        
+        try:
+            notification["sender"] = message.from_id.user_id
+        except:
+            notification["sender"] = str(message.to_id.channel_id)
+            
+        #notification["sender"] = message.from_id.user_id
 
         notification_group_filename = os.path.join(
             path, "notificacoes_grupo_" + str(notification["group_id"]) + ".json" )
@@ -300,7 +336,7 @@ class TelegramCollector():
         await async_client.start()
 
         async for dialog in async_client.iter_dialogs():
-            if (dialog.is_group and dialog.title not in self.group_blacklist and
+            if ((dialog.is_group or dialog.is_channel) and dialog.title not in self.group_blacklist and
                     str(abs(dialog.id)) not in self.group_blacklist):
                 #TODO: Check why dialog.id is a negative number
                 group_names[str(abs(dialog.id))] = dialog.title
@@ -333,10 +369,16 @@ class TelegramCollector():
         try:
             if (self.collection_mode != 'unread'):
                 async with TelegramClient('/data/collector_local', self.api_id, self.api_hash) as client:
+                
+                    print("Susccessfully connected to API")
                     async for dialog in client.iter_dialogs():
                         #TODO: Check why dialog.id is a negative number
-                        if (dialog.is_group and dialog.title not in self.group_blacklist and
+                        if ((dialog.is_group or dialog.is_channel) and dialog.title not in self.group_blacklist and
                             str(abs(dialog.id)) not in self.group_blacklist):
+                            
+                            if   dialog.is_group:   inst = 'group'
+                            if dialog.is_channel: inst = 'channel'
+                            print("Collecting mssages for " + str(inst) + ":" + str(dialog.id) + " - " + str(dialog.title))
                             async for message in client.iter_messages(dialog):
                                 if (message.date < start_date):
                                     break
@@ -412,15 +454,15 @@ async def main():
 
     parser.add_argument("--process_audio_hashes", type=bool,
                         help="Se hashes de audios devem ser calculados durante"
-                        " a execução.", default=False)
+                        " a execução.", default=True)
 
     parser.add_argument("--process_image_hashes", type=bool,
                         help="Se hashes de imagens devem ser calculados"
-                        " durante a execução.", default=False)
+                        " durante a execução.", default=True)
 
     parser.add_argument("--process_video_hashes", type=bool,
                         help="Se hashes de videos devem ser calculados durante"
-                        " a execução.", default=False)
+                        " a execução.", default=True)
 
     parser.add_argument("--process_other_hashes", type=bool,
                         help="Se hashes de outros tipos de mídiaa devem ser calculados durante"
